@@ -11,24 +11,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack bundle.txt (skipped if files are already in the repo)
+      - name: Find files and unpack bundle
         run: |
-          if [ -f bundle.txt ]; then
-            python3 - <<'PY'
-          import os, re
-          t = open('bundle.txt', encoding='utf-8').read()
-          n = 0
-          for m in re.finditer(r'=== FILE: (.+?) ===\n(.*?)\n=== END ===', t, re.S):
-              p = m.group(1)
-              if os.path.dirname(p):
-                  os.makedirs(os.path.dirname(p), exist_ok=True)
-              open(p, 'w', encoding='utf-8').write(m.group(2) + '\n')
-              n += 1
-          print('unpacked files:', n)
-          PY
-          fi
-          test -f pubspec.yaml || { echo "ERROR: pubspec.yaml missing. Upload bundle.txt to the repo root."; exit 1; }
-          test -f assets/logo.png || { echo "ERROR: assets/logo.png missing. Upload logo.png into an assets folder."; exit 1; }
+          B=$(ls bundle*.txt 2>/dev/null | head -n 1)
+          L=$(ls logo*.png 2>/dev/null | head -n 1)
+          echo "bundle file: [$B]  logo file: [$L]"
+          if [ -z "$B" ]; then echo "ERROR: no bundle*.txt file found in the repo root"; ls; exit 1; fi
+          python3 -c 'import os,re,sys
+          t=open(sys.argv[1],encoding="utf-8").read()
+          n=0
+          for m in re.finditer(r"=== FILE: (.+?) ===\n(.*?)\n=== END ===",t,re.S):
+              p=m.group(1)
+              os.makedirs(os.path.dirname(p) or ".",exist_ok=True)
+              open(p,"w",encoding="utf-8").write(m.group(2)+"\n")
+              n+=1
+          print("unpacked files:",n)' "$B"
+          mkdir -p assets
+          if [ ! -f assets/logo.png ] && [ -n "$L" ]; then cp "$L" assets/logo.png; fi
+          test -f pubspec.yaml || { echo "ERROR: pubspec.yaml missing after unpack. Is the bundle file complete?"; exit 1; }
+          test -f assets/logo.png || { echo "ERROR: no logo*.png file found in the repo root"; ls; exit 1; }
+          echo "Unpack OK"
 
       - uses: actions/setup-java@v4
         with:
